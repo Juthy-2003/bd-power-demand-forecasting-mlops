@@ -1,0 +1,43 @@
+# Image built by CI for linux/amd64 + linux/arm64 and pushed to GHCR.
+# For k3d: `k3d image import powerfc-app:local` and keep pullPolicy Never.
+image:
+  repository: powerfc-app
+  tag: local
+  pullPolicy: IfNotPresent
+
+mlflowImage:
+  repository: powerfc-mlflow
+  tag: local
+
+ingress:
+  enabled: true
+  className: traefik        # k3s ships Traefik
+  host: ""                  # empty = match any host (use the node IP / nip.io)
+
+postgres:
+  password: powerfc         # override with --set or an external Secret in real use
+  storage: 2Gi
+
+mlflow:
+  storage: 2Gi
+
+# Requests/limits keep each component inside its share of a 2 OCPU / 12 GB
+# node (memory figures measured on k3d before the 2026-10-10 trim; see
+# docs/MEMORY.md).
+resources:
+  api:        { requests: { cpu: 50m,  memory: 192Mi }, limits: { memory: 512Mi } }
+  mlflow:     { requests: { cpu: 50m,  memory: 384Mi }, limits: { memory: 768Mi } }
+  postgres:   { requests: { cpu: 50m,  memory: 128Mi }, limits: { memory: 512Mi } }
+  pipeline:   { requests: { cpu: 500m, memory: 768Mi }, limits: { memory: 2Gi } }
+
+# The scheduled pipeline as Kubernetes CronJobs — the lightweight alternative
+# to running Airflow on a small node (ADR 0005). Airflow remains the
+# orchestrator (and the only closed drift → retrain loop) in docker compose.
+# Here, drift is checked and logged daily and retraining is weekly.
+# Times are UTC (Dhaka is UTC+6).
+pipeline:
+  enabled: true
+  dataStorage: 1Gi
+  schedules:
+    daily: "30 18 * * *"   # 00:30 Dhaka: ingest the next replay day → forecast → drift check
+    train: "0 20 * * 0"    # weekly, Sunday 02:00 Dhaka: train → gate → forecast → API reload

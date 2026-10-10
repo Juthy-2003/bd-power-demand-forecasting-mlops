@@ -1,0 +1,5 @@
+# Local Python environment and caches (rebuilt by `uv sync`)
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/

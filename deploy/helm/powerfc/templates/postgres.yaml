@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+data:
+  initdb.sql: |
+    CREATE DATABASE mlflow;
+    CREATE DATABASE powerfc;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - { name: POSTGRES_USER, value: powerfc }
+            - { name: POSTGRES_PASSWORD, value: {{ .Values.postgres.password | quote }} }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          readinessProbe: { exec: { command: ["pg_isready", "-U", "powerfc"] }, periodSeconds: 5 }
+          resources: {{- toYaml .Values.resources.postgres | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d }
+      volumes:
+        - name: init
+          configMap: { name: postgres-init }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.postgres.storage }} } } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432 }]

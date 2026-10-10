@@ -1,0 +1,7 @@
+# MLflow tracking server + model registry. Postgres stores runs and the
+# registry; artifacts go to --artifacts-destination (a volume locally, a PVC
+# on Kubernetes, S3 if ever needed) and the server proxies artifact access,
+# so clients need no storage credentials.
+FROM python:3.12-slim
+RUN pip install --no-cache-dir "mlflow==3.17.0" "psycopg[binary]==3.*" "boto3==1.*"
+EXPOSE 5000

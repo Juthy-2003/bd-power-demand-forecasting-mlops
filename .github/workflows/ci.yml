@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: Lint and format
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Unit tests (incl. leakage, data contract, gate rules, API)
+        run: uv run pytest -q --cov=powerfc --cov-report=term
+
+  data-contract:
+    # The real PGCB file must still pass the contract (pinned by sha256).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: uv sync --frozen --no-dev
+      - run: uv run powerfc fetch && uv run powerfc assemble
+
+  train-smoke:
+    # Train on the real data with a tiny window: proves the training code
+    # runs end to end and logs to MLflow, in a few minutes.
+    runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: sqlite:///mlflow.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: uv sync --frozen --no-dev
+      - run: uv run powerfc fetch && uv run powerfc assemble
+      - name: Train, register, gate
+        run: |
+          uv run powerfc train --weeks 4 --refit-every 4 | tail -20
+          uv run powerfc promote
+
+  model-gate:
+    # CI/CD for ML: a recipe change must beat the committed champion metrics
+    # on identical data and folds, or this job fails and blocks the merge.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: uv sync --frozen --no-dev
+      - run: uv run python -m powerfc.ci_gate
+
+  integration:
+    # The real stack: Postgres + MLflow + API containers; train a model into
+    # it, write a forecast, and check the API serves it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: docker compose up -d --build postgres mlflow api
+      - run: uv sync --frozen --no-dev && uv run powerfc fetch && uv run powerfc assemble
+      - name: Train into the stack and forecast
+        env:
+          MLFLOW_TRACKING_URI: http://localhost:5050
+          POWERFC_DB: postgresql://powerfc:powerfc@localhost:5433/powerfc
+        run: |
+          uv run powerfc train --weeks 4 --refit-every 4 > /dev/null
+          uv run powerfc promote
+          uv run powerfc forecast
+      - name: API serves the champion
+        run: |
+          curl -sf -X POST localhost:8000/admin/reload
+          curl -sf localhost:8000/ready
+          curl -sf "localhost:8000/forecast?horizon=24" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d['points'])==24, d"
+      - if: failure()
+        run: docker compose logs --tail 100

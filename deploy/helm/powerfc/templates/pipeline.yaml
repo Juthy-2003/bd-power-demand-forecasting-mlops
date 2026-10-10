@@ -1,0 +1,81 @@
+{{- if .Values.pipeline.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-data
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.pipeline.dataStorage }} } } }
+---
+# One-off bootstrap: download the PGCB CSV (checksum-verified), build the
+# clean table, train and promote the first champion, write a forecast.
+# A plain Job, not a Helm hook: the API only turns ready once a champion
+# exists, so a post-install hook (which waits for readiness) would deadlock.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-{{ .Release.Revision }}
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+    app: bootstrap
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext: { fsGroup: 1000 }
+      initContainers:
+        - name: wait-for-mlflow
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-c", "import time,urllib.request\nfor _ in range(120):\n  try: urllib.request.urlopen('http://mlflow:5000/health'); break\n  except Exception: time.sleep(5)"]
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c", "powerfc fetch && powerfc assemble && powerfc train && powerfc promote && powerfc forecast"]
+          env: {{- include "powerfc.pipelineEnv" . | nindent 12 }}
+          resources: {{- toYaml .Values.resources.pipeline | nindent 12 }}
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes:
+        - { name: data, persistentVolumeClaim: { claimName: pipeline-data } }
+---
+{{- range $step, $schedule := .Values.pipeline.schedules }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pipeline-{{ $step }}
+  labels:
+    {{- include "powerfc.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ $schedule | quote }}
+  concurrencyPolicy: Forbid       # one run at a time; they share the data volume
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: { fsGroup: 1000 }
+          containers:
+            - name: {{ $step }}
+              image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              {{- if eq $step "daily" }}
+              # Same order as Airflow's daily_pipeline; `&&` makes each step wait for the previous one.
+              command: ["sh", "-c", "powerfc replay-next && powerfc forecast && powerfc drift"]
+              {{- else if eq $step "train" }}
+              # reload-api: the API re-reads the champion so /model shows the new version.
+              command: ["sh", "-c", "powerfc train && powerfc promote && powerfc forecast && powerfc reload-api"]
+              {{- end }}
+              env: {{- include "powerfc.pipelineEnv" $ | nindent 16 }}
+              resources: {{- toYaml $.Values.resources.pipeline | nindent 16 }}
+              volumeMounts: [{ name: data, mountPath: /data }]
+          volumes:
+            - { name: data, persistentVolumeClaim: { claimName: pipeline-data } }
+---
+{{- end }}
+{{- end }}

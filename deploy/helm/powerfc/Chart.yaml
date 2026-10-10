@@ -1,0 +1,6 @@
+apiVersion: v2
+name: powerfc
+description: Bangladesh power demand forecasting — forecast API, MLflow, monitoring and the scheduled pipeline on Kubernetes (k3d locally, k3s on the cloud node).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

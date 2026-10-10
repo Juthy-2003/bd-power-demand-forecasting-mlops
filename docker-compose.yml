@@ -1,0 +1,80 @@
+# Local stack: Postgres, MLflow, Airflow and the forecast API (4 containers).
+#
+#   docker compose -p powerfc up -d --build
+#
+# UIs: Airflow :8080 (admin/admin) · MLflow :5050 · API docs :8000/docs
+
+x-pipeline-env: &pipeline-env
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  POWERFC_DB: postgresql://powerfc:powerfc@postgres:5432/powerfc
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+  POWERFC_API_URL: http://api:8000  # the train DAG calls /admin/reload after a promotion
+
+services:
+  postgres:
+    image: postgres:17
+    environment: { POSTGRES_USER: powerfc, POSTGRES_PASSWORD: powerfc, POSTGRES_DB: postgres }
+    ports: ["5433:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./deploy/compose/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "powerfc"], interval: 5s, retries: 20 }
+
+  mlflow:
+    build: { context: ., dockerfile: Dockerfile.mlflow }
+    image: powerfc-mlflow:local
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"  # 1.6 GB → 0.35 GB; jobs are unused (ADR 0007)
+    # Artifacts live on a volume and are proxied by the server, so clients
+    # never touch storage directly; switching to S3 later changes only
+    # --artifacts-destination. (MinIO images are no longer on Docker Hub.)
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri postgresql://powerfc:powerfc@postgres:5432/mlflow
+      --artifacts-destination /mlartifacts --serve-artifacts
+      --allowed-hosts "*" --workers 1
+    ports: ["5050:5000"]  # host 5050: macOS AirPlay already listens on 5000
+    volumes: [mlflow-artifacts:/mlartifacts]
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"], interval: 10s, retries: 30 }
+
+  airflow:
+    build: { context: ., dockerfile: Dockerfile.airflow }
+    image: powerfc-airflow:local
+    command: standalone
+    depends_on:
+      postgres: { condition: service_healthy }
+      mlflow: { condition: service_healthy }
+    environment:
+      <<: *pipeline-env
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://powerfc:powerfc@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Paused until `make bootstrap` has trained the first champion and unpaused them.
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:admin"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/simple_auth_passwords.json
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "30"
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    ports: ["8080:8080"]
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+      - ./data:/opt/powerfc/data
+      - ./deploy/compose/simple_auth_passwords.json:/opt/airflow/simple_auth_passwords.json  # Airflow rewrites it at start
+
+  api:
+    build: .
+    image: powerfc-app:local
+    depends_on:
+      postgres: { condition: service_healthy }
+      mlflow: { condition: service_healthy }
+    environment:
+      <<: *pipeline-env
+    ports: ["8000:8000"]
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"], interval: 10s, retries: 20 }
+
+volumes:
+  pg-data:
+  mlflow-artifacts:

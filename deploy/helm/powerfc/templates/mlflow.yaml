@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow-artifacts
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.mlflow.storage }} } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }  # one writer on the artifact volume
+  selector: { matchLabels: { app: mlflow } }
+  template:
+    metadata: { labels: { app: mlflow } }
+    spec:
+      containers:
+        - name: mlflow
+          image: "{{ .Values.mlflowImage.repository }}:{{ .Values.mlflowImage.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --backend-store-uri=postgresql://powerfc:{{ .Values.postgres.password }}@postgres:5432/mlflow
+            - --artifacts-destination=/mlartifacts
+            - --serve-artifacts
+            - --allowed-hosts=*
+            - --workers=1
+          env:
+            # MLflow 3.17 also starts a background "jobs" system (a job runner
+            # plus ~8 huey consumers, ~230 MB each): 1.62 GB measured vs
+            # 349 MB without it. This project does not use MLflow jobs.
+            - { name: MLFLOW_SERVER_ENABLE_JOB_EXECUTION, value: "false" }
+          ports: [{ containerPort: 5000 }]
+          readinessProbe: { httpGet: { path: /health, port: 5000 }, periodSeconds: 10, failureThreshold: 30 }
+          resources: {{- toYaml .Values.resources.mlflow | nindent 12 }}
+          volumeMounts: [{ name: artifacts, mountPath: /mlartifacts }]
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim: { claimName: mlflow-artifacts }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  labels:
+    {{- include "powerfc.labels" . | nindent 4 }}
+spec:
+  selector: { app: mlflow }
+  ports: [{ port: 5000 }]

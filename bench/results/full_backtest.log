@@ -1,0 +1,19 @@
+backtest_2023_2025 {"smape": 4.2483, "naive_smape": 10.5647, "skill_smape": 0.5979, "mae": 480.8745, "naive_mae": 1215.286, "coverage80": 0.6827, "width80": 1197.4603, "smape_holiday": 7.5261, "smape_normal": 3.8946, "crossing_rate": 0.0043, "n_hours": 2351.0}
+holdout_2025_2026 {"smape": 3.5796, "naive_smape": 6.3244, "skill_smape": 0.434, "mae": 454.1597, "naive_mae": 787.5577, "coverage80": 0.7759, "width80": 1226.0193, "smape_holiday": 6.3767, "smape_normal": 3.4084, "crossing_rate": 0.0092, "n_hours": 1196.0}
+**backtest 2023 2025** (104 weekly origins)
+
+| Lead time | sMAPE | Seasonal-naive sMAPE | Skill | MAE (MW) | 80% interval coverage (raw) | Interval width (MW) | Holiday sMAPE |
+|---|---|---|---|---|---|---|---|
+| 1–24 h | 4.25% | 10.56% | 60% | 481 | 68.3% | 1197 | 7.53% |
+| 25–48 h | 5.49% | 10.07% | 45% | 645 | 65.6% | 1427 | 9.33% |
+| 49–72 h | 6.64% | 9.96% | 33% | 791 | 61.2% | 1555 | 12.86% |
+
+**holdout 2025 2026** (52 weekly origins)
+
+| Lead time | sMAPE | Seasonal-naive sMAPE | Skill | MAE (MW) | 80% interval coverage (raw) | Interval width (MW) | Holiday sMAPE |
+|---|---|---|---|---|---|---|---|
+| 1–24 h | 3.58% | 6.32% | 43% | 454 | 77.6% | 1226 | 6.38% |
+| 25–48 h | 5.10% | 8.53% | 40% | 640 | 74.6% | 1605 | 8.56% |
+| 49–72 h | 5.98% | 8.51% | 30% | 742 | 66.0% | 1722 | 7.86% |
+
+uv run python bench/full_backtest.py  985.31s user 343.22s system 189% cpu 11:42.23 total

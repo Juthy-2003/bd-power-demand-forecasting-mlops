@@ -1,0 +1,14 @@
+.venv
+data
+mlruns
+**/__pycache__
+.pytest_cache
+.ruff_cache
+devlog
+docs
+tests
+deploy
+infra
+dags
+*.md
+.git

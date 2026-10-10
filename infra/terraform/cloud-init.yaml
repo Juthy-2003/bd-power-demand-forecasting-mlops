@@ -1,0 +1,11 @@
+#cloud-config
+# Installs k3s on first boot. Ubuntu images on OCI ship an iptables REJECT
+# rule that blocks everything except SSH, so 80/443/6443 are opened here too
+# (the VCN security list is the outer firewall).
+package_update: true
+runcmd:
+  - iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT
+  - iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT
+  - iptables -I INPUT 6 -p tcp --dport 6443 -j ACCEPT
+  - netfilter-persistent save
+  - curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${k3s_version}" sh -s - --write-kubeconfig-mode 644

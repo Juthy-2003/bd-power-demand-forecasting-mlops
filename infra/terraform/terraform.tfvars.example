@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (git-ignored) and fill in from the OCI console:
+# Profile → API keys → Add API key gives fingerprint and the config snippet.
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxx"
+user_ocid        = "ocid1.user.oc1..xxxx"
+fingerprint      = "aa:bb:..."
+private_key_path = "~/.oci/oci_api_key.pem"
+compartment_ocid = "ocid1.tenancy.oc1..xxxx" # the root compartment is fine for one project
+region           = "ap-mumbai-1"
+admin_cidr       = "203.0.113.10/32"         # your public IP

@@ -1,0 +1,105 @@
+{
+  "recipe": {
+    "n_estimators": 400,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "min_child_samples": 50,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "verbose": -1,
+    "n_jobs": 4
+  },
+  "windows": {
+    "backtest_2023_2025": {
+      "origins": 104.0,
+      "seconds": 492,
+      "by_block": {
+        "24": {
+          "smape": 4.2483,
+          "naive_smape": 10.5647,
+          "skill_smape": 0.5979,
+          "mae": 480.8745,
+          "naive_mae": 1215.286,
+          "coverage80": 0.6827,
+          "width80": 1197.4603,
+          "smape_holiday": 7.5261,
+          "smape_normal": 3.8946,
+          "crossing_rate": 0.0043,
+          "n_hours": 2351.0
+        },
+        "48": {
+          "smape": 5.4946,
+          "naive_smape": 10.0679,
+          "skill_smape": 0.4542,
+          "mae": 645.1394,
+          "naive_mae": 1184.217,
+          "coverage80": 0.6564,
+          "width80": 1427.4861,
+          "smape_holiday": 9.3256,
+          "smape_normal": 5.2149,
+          "crossing_rate": 0.0085,
+          "n_hours": 2366.0
+        },
+        "72": {
+          "smape": 6.642,
+          "naive_smape": 9.958,
+          "skill_smape": 0.333,
+          "mae": 791.4393,
+          "naive_mae": 1171.1529,
+          "coverage80": 0.6118,
+          "width80": 1555.4941,
+          "smape_holiday": 12.856,
+          "smape_normal": 6.0532,
+          "crossing_rate": 0.0118,
+          "n_hours": 2380.0
+        }
+      }
+    },
+    "holdout_2025_2026": {
+      "origins": 52.0,
+      "seconds": 207,
+      "by_block": {
+        "24": {
+          "smape": 3.5796,
+          "naive_smape": 6.3244,
+          "skill_smape": 0.434,
+          "mae": 454.1597,
+          "naive_mae": 787.5577,
+          "coverage80": 0.7759,
+          "width80": 1226.0193,
+          "smape_holiday": 6.3767,
+          "smape_normal": 3.4084,
+          "crossing_rate": 0.0092,
+          "n_hours": 1196.0
+        },
+        "48": {
+          "smape": 5.104,
+          "naive_smape": 8.5302,
+          "skill_smape": 0.4017,
+          "mae": 640.244,
+          "naive_mae": 1054.5197,
+          "coverage80": 0.7464,
+          "width80": 1604.6984,
+          "smape_holiday": 8.5587,
+          "smape_normal": 4.8159,
+          "crossing_rate": 0.0084,
+          "n_hours": 1195.0
+        },
+        "72": {
+          "smape": 5.98,
+          "naive_smape": 8.5071,
+          "skill_smape": 0.2971,
+          "mae": 742.383,
+          "naive_mae": 1045.9679,
+          "coverage80": 0.6603,
+          "width80": 1721.7392,
+          "smape_holiday": 7.8586,
+          "smape_normal": 5.8233,
+          "crossing_rate": 0.0067,
+          "n_hours": 1195.0
+        }
+      }
+    }
+  }
+}
